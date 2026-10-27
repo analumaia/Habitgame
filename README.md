@@ -36,9 +36,13 @@ No começo do `app.js`:
 
 As cores ficam nas variáveis do topo do `style.css`.
 
-## Seus dados
+## Seus dados e sincronização
 
-Tudo fica no `localStorage` do navegador, então **não sincroniza entre aparelhos** e some se você limpar os dados do site. Use **Perfil → Exportar backup** de vez em quando; para trocar de aparelho, exporte em um e importe no outro.
+Os dados ficam no `localStorage` do navegador e somem se você limpar os dados do site. Use **Perfil → Exportar backup** de vez em quando.
+
+Para usar o mesmo recanto em vários aparelhos, ative a **sincronização com o Firebase** (gratuito, login com Google): siga o **[FIREBASE-SETUP.md](FIREBASE-SETUP.md)**. Sem configurar, o app funciona normalmente, só neste aparelho.
+
+Arquivos: `index.html`, `style.css`, `app.js` (o jogo), `merge.js` + `sync-core.js` + `sync.js` (sincronização), `firebase-config.js` (você preenche), `firestore.rules` (regras de segurança) e `tests/` (testes opcionais).
 
 ## Fontes
 

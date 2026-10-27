@@ -66,7 +66,8 @@
   /* ---------------------------------------------------------
      ESTADO
      --------------------------------------------------------- */
-  const defaultShop = () => DEFAULT_SHOP.map(([icon, name, cost]) => ({ id: uid(), icon, name, cost }));
+  // ids fixos: assim a loja padrão não duplica ao sincronizar um aparelho novo
+  const defaultShop = () => DEFAULT_SHOP.map(([icon, name, cost], i) => ({ id: 'loja' + (i + 1), icon, name, cost, created: i }));
   const defaultState = () => ({
     v: 1,
     profile: { name: '', avatar: null, onboarded: false },
@@ -77,7 +78,8 @@
     shop: defaultShop(), // {id,icon,name,cost}
     purchases: [],       // {id,name,icon,cost,at}
     achievements: {},    // { id: 'YYYY-MM-DD' }
-    ui: { tab: 'habits', filter: 'today' }
+    stamps: {},          // { chaveDoRegistro: quando foi alterado } — usado na sincronização
+    ui: { tab: 'habits', filter: 'today' }   // só deste aparelho, não sincroniza
   });
 
   let storageOk = true;
@@ -97,12 +99,27 @@
     ['habits', 'quests', 'shop', 'purchases'].forEach((k) => { if (!Array.isArray(s[k])) s[k] = []; });
     if (!s.comps || typeof s.comps !== 'object') s.comps = {};
     if (!s.achievements || typeof s.achievements !== 'object') s.achievements = {};
+    if (!s.stamps || typeof s.stamps !== 'object') s.stamps = {};
+    // lojas criadas antes da sincronização tinham ids aleatórios: troca pelos ids fixos dos itens padrão
+    s.shop.forEach((it) => {
+      const idx = DEFAULT_SHOP.findIndex(([icon, name]) => icon === it.icon && name === it.name);
+      if (idx >= 0 && !/^loja\d+$/.test(it.id) && !s.shop.some((o) => o.id === 'loja' + (idx + 1))) { it.id = 'loja' + (idx + 1); it.created = idx; }
+    });
     return s;
   }
   let S = load();
-  function save() {
+
+  // carimbos: guarda uma "foto" do estado para descobrir o que mudou a cada save()
+  const RM = window.RecantoMerge || null;
+  let lastSnap = RM ? RM.snapshot(S) : null;
+  if (RM) RM.restamp(S, lastSnap);
+
+  function save(opts) {
+    let changed = false;
+    if (RM) { const r = RM.restamp(S, lastSnap); lastSnap = r.snap; changed = r.changed; }
     try { localStorage.setItem(KEY, JSON.stringify(S)); storageOk = true; }
     catch (e) { if (storageOk) { storageOk = false; toast('Não consegui salvar neste navegador. Faça um backup em Perfil.'); } }
+    if ((changed || (opts && opts.force)) && !(opts && opts.silent)) window.dispatchEvent(new Event('recanto:changed'));
   }
 
   /* ---------------------------------------------------------
@@ -474,7 +491,7 @@
         <div class="hero-body">
           <button class="avatar-frame px-flat" data-act="avatar" aria-label="Editar avatar"><img class="pix" alt="Seu avatar" src="${avatarSrc()}"><span class="edit-badge px-flat" aria-hidden="true">✎</span></button>
           <div class="hero-info">
-            <div class="hero-name">${esc(S.profile.name || 'Aventureira')}</div>
+            <div class="hero-name">${esc(S.profile.name || 'Aventureira')}<span id="syncDot" class="sync-dot"></span></div>
             <div class="hero-title">Nível ${li.level} · ${esc(titleFor(li.level))}</div>
           </div>
           <div class="coin-chip px-flat" title="Pontos para gastar na loja">${COIN}<span id="coinNum">${coins()}</span></div>
@@ -485,6 +502,7 @@
         </div>
       </div>`;
     drawScene($('#scene'), li.level);
+    updateSyncDot();
     const bar = $('#xpfill');
     bar.style.width = (lastHero && lastHero.level === li.level ? lastHero.pct : 0) + '%';
     requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = pct + '%'; }));
@@ -692,6 +710,7 @@
           <div class="col ${i === 6 ? 'today' : ''}"><span class="v">${x.p || ''}</span><div class="b px-flat" style="height:${Math.max(4, Math.round(x.p / max * 100))}px"></div><span class="l">${DAY_LETTER[x.d.getDay()]}</span></div>`).join('')}</div></section>
       <section class="card px"><h3>Conquistas <small class="muted">${Object.keys(S.achievements).length}/${ACH.length}</small></h3>
         <div class="ach-grid">${ACH.map(([id, icon, name, desc]) => `<div class="ach px-flat ${S.achievements[id] ? '' : 'locked'}"><span class="ic">${icon}</span><span><b>${name}</b><small>${desc}</small></span></div>`).join('')}</div></section>
+      ${syncCard()}
       <section class="card px"><h3>Seus dados</h3>
         <p class="hint">Tudo fica salvo só neste navegador. Faça backup de vez em quando, principalmente antes de limpar o histórico do navegador ou trocar de aparelho.</p>
         <div class="actions" style="justify-content:flex-start;margin-top:12px"><button class="btn sm" data-act="export">Exportar backup</button><button class="btn ghost sm" data-act="import">Importar backup</button></div></section>`;
@@ -733,12 +752,22 @@
   }
   const closeModal = () => { if (dlg.open) dlg.close(); };
   dlg.addEventListener('click', (e) => { if (e.target === dlg) closeModal(); });
-  dlg.addEventListener('close', () => { dlg.innerHTML = ''; const f = dlgOnClose; dlgOnClose = null; if (f) f(); });
+  dlg.addEventListener('close', () => {
+    if (dlg.open) return; // evento atrasado de uma janela anterior: já abriu outra
+    dlg.innerHTML = '';
+    const f = dlgOnClose; dlgOnClose = null; if (f) f();
+    // dados que chegaram de outro aparelho enquanto havia uma janela aberta
+    if (pendingRemote) {
+      const r = pendingRemote; pendingRemote = null;
+      applyState(RM ? RM.merge(window.Recanto.getState(), r) : r);
+    }
+  });
 
   function confirmModal({ title, text, ok = 'Confirmar', danger = false, onOk }) {
     openModal(`<div class="modal-in"><h2>${esc(title)}</h2><p>${esc(text)}</p>
       <div class="actions"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn ${danger ? 'danger' : ''}" id="okBtn">${esc(ok)}</button></div></div>`,
-      (d) => { $('#okBtn', d).addEventListener('click', () => { closeModal(); onOk(); }); });
+      // onOk roda DEPOIS que a janela fecha (evento "close"), para poder abrir outra janela sem ser apagada
+      (d) => { $('#okBtn', d).addEventListener('click', () => { dlgOnClose = onOk; closeModal(); }); });
   }
 
   const emojiRadios = (name, list, sel) => list.map((e) => `<label class="emoji"><input type="radio" name="${name}" value="${e}" ${e === sel ? 'checked' : ''}><span>${e}</span></label>`).join('');
@@ -811,7 +840,7 @@
           if (!v.title) return toast('Dê um nome ao hábito.');
           if (v.freq === 'weekly' && !v.days.length) return toast('Escolha pelo menos um dia da semana.');
           if (h) Object.assign(h, v);
-          else S.habits.push(Object.assign({ id: uid(), createdAt: ymd(today()), deleted: false }, v));
+          else S.habits.push(Object.assign({ id: uid(), createdAt: ymd(today()), created: Date.now(), deleted: false }, v));
           closeModal();
           if (!h) { S.ui.filter = S.ui.filter === 'today' ? 'today' : v.freq; toast('Hábito criado! 🌱', 'good'); }
           else toast('Hábito atualizado.');
@@ -857,7 +886,7 @@
           const steps = $$('input[name=step]', form).filter((i) => i.value.trim()).map((i) => ({ id: i.dataset.sid || uid(), text: i.value.trim(), done: !!i.dataset.done }));
           const v = { title, notes: String(fd.get('notes') || '').trim(), steps, pts: Math.max(1, parseInt(fd.get('pts'), 10) || S.settings.ptsQuest), due: fd.get('due') || '', main: !!fd.get('main') };
           if (v.main) S.quests.forEach((x) => { x.main = false; });
-          if (q) Object.assign(q, v); else S.quests.push(Object.assign({ id: uid(), done: false }, v));
+          if (q) Object.assign(q, v); else S.quests.push(Object.assign({ id: uid(), done: false, created: Date.now() }, v));
           closeModal(); if (!q) toast('Quest criada! 📜', 'good'); commit();
         });
         const del = $('#delBtn', form);
@@ -886,7 +915,7 @@
           const fd = new FormData(form), name = String(fd.get('name') || '').trim();
           if (!name) return toast('Dê um nome à recompensa.');
           const v = { name, icon: fd.get('icon') || '🎁', cost: Math.max(1, parseInt(fd.get('cost'), 10) || 1) };
-          if (it) Object.assign(it, v); else S.shop.push(Object.assign({ id: uid() }, v));
+          if (it) Object.assign(it, v); else S.shop.push(Object.assign({ id: uid(), created: Date.now() }, v));
           closeModal(); commit();
         });
         const del = $('#delBtn', form);
@@ -972,8 +1001,12 @@
           closeModal(); commit();
         });
         $('#resetBtn', m).addEventListener('click', () => confirmModal({
-          title: 'Apagar tudo?', text: 'Isso remove hábitos, pontos, quests, loja e avatar deste navegador. Não dá para desfazer (a menos que você tenha um backup).',
-          ok: 'Apagar tudo', danger: true, onOk: () => { S = defaultState(); lastHero = null; save(); render(); welcomeModal(); }
+          title: 'Apagar tudo?', text: 'Isso remove hábitos, pontos, quests, loja e avatar. Com a sincronização ligada, apaga também na nuvem e nos seus outros aparelhos. Não dá para desfazer (a menos que você tenha um backup).',
+          ok: 'Apagar tudo', danger: true, onOk: () => {
+            const old = S; S = defaultState();
+            if (RM) { RM.replaceState(old, S); lastSnap = RM.snapshot(S); }
+            lastHero = null; save({ force: true }); render(); welcomeModal();
+          }
         }));
       });
   }
@@ -985,6 +1018,7 @@
       <p>Aqui cada hábito cumprido rende pontos. Eles viram <b>XP</b> (para subir de nível e fazer seu recanto crescer) e <b>moedas</b> para trocar por recompensas na loja.</p>
       <div class="field"><label class="lbl" for="w-name">Como devo te chamar?</label><input type="text" id="w-name" name="name" maxlength="24" placeholder="Seu nome ou apelido" autofocus></div>
       <label class="toggle-row"><input type="checkbox" name="samples" checked> Começar com alguns hábitos de exemplo (você edita depois)</label>
+      <div id="wSyncBox">${welcomeSyncBtn()}</div>
       <div class="actions"><button type="submit" class="btn">Começar</button></div></form>`,
       (m) => {
         $('#f-wel', m).addEventListener('submit', (e) => {
@@ -1002,16 +1036,16 @@
   function addSamples() {
     const t = ymd(today());
     const base = { notes: '', createdAt: t, deleted: false, days: [], monthMode: 'day', monthDay: 1, monthNth: 1, monthWeekday: 1 };
-    S.habits.push(
-      Object.assign({}, base, { id: uid(), title: 'Beber 2 litros de água', icon: '💧', freq: 'daily' }),
-      Object.assign({}, base, { id: uid(), title: 'Ler 15 minutos', icon: '📚', freq: 'daily' }),
-      Object.assign({}, base, { id: uid(), title: 'Caminhar 20 minutos', icon: '🏃', freq: 'weekly', days: [1, 3, 5] }),
-      Object.assign({}, base, { id: uid(), title: 'Arrumar a casa', icon: '🧹', freq: 'weekly', days: [6] }),
-      Object.assign({}, base, { id: uid(), title: 'Revisar as finanças', icon: '📝', freq: 'monthly', monthDay: 5 })
-    );
+    // ids fixos: se os exemplos forem criados em dois aparelhos, a sincronização não duplica
+    const add = (o) => { if (!S.habits.some((h) => h.id === o.id)) S.habits.push(Object.assign({}, base, o)); };
+    add({ id: 'ex-agua', created: 1, title: 'Beber 2 litros de água', icon: '💧', freq: 'daily' });
+    add({ id: 'ex-ler', created: 2, title: 'Ler 15 minutos', icon: '📚', freq: 'daily' });
+    add({ id: 'ex-caminhar', created: 3, title: 'Caminhar 20 minutos', icon: '🏃', freq: 'weekly', days: [1, 3, 5] });
+    add({ id: 'ex-casa', created: 4, title: 'Arrumar a casa', icon: '🧹', freq: 'weekly', days: [6] });
+    add({ id: 'ex-financas', created: 5, title: 'Revisar as finanças', icon: '📝', freq: 'monthly', monthDay: 5 });
     if (!S.quests.length) S.quests.push({
-      id: uid(), title: 'Minha primeira semana no recanto', notes: 'Ver como a rotina funciona na prática.', pts: S.settings.ptsQuest, due: '', main: true, done: false,
-      steps: [{ id: uid(), text: 'Ajustar meus hábitos ao meu dia', done: false }, { id: uid(), text: 'Cumprir os hábitos por 3 dias seguidos', done: false }, { id: uid(), text: 'Resgatar minha primeira recompensa', done: false }]
+      id: 'ex-quest', created: 1, title: 'Minha primeira semana no recanto', notes: 'Ver como a rotina funciona na prática.', pts: S.settings.ptsQuest, due: '', main: true, done: false,
+      steps: [{ id: 'ex-q1', text: 'Ajustar meus hábitos ao meu dia', done: false }, { id: 'ex-q2', text: 'Cumprir os hábitos por 3 dias seguidos', done: false }, { id: 'ex-q3', text: 'Resgatar minha primeira recompensa', done: false }]
     });
   }
 
@@ -1094,7 +1128,11 @@
           if (!o || !Array.isArray(o.habits)) throw new Error('formato');
           confirmModal({
             title: 'Importar backup?', text: 'Seus dados atuais neste navegador serão substituídos pelos do arquivo.', ok: 'Importar', danger: true,
-            onOk: () => { S = migrate(o); S.profile.onboarded = true; lastHero = null; save(); render(); toast('Backup importado! 🎉', 'good'); }
+            onOk: () => {
+              const old = S; S = migrate(o); S.profile.onboarded = true;
+              if (RM) { RM.replaceState(old, S); lastSnap = RM.snapshot(S); }
+              lastHero = null; save({ force: true }); render(); toast('Backup importado! 🎉', 'good');
+            }
           });
         } catch (e) { toast('Esse arquivo não parece um backup do Recanto.'); }
       };
@@ -1127,6 +1165,9 @@
       case 'buy': buy(id); break;
       case 'avatar': avatarModal(); break;
       case 'settings': settingsModal(); break;
+      case 'sync-login': syncLogin(); break;
+      case 'sync-now': if (window.RecantoSync) window.RecantoSync.syncNow(); break;
+      case 'sync-logout': if (window.RecantoSync) window.RecantoSync.signOut(); break;
       case 'export': exportData(); break;
       case 'import': importData(); break;
       case 'close': closeModal(); break;
@@ -1142,9 +1183,85 @@
   if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener && matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.settings.theme === 'auto') render(); });
 
   /* ---------------------------------------------------------
+     SINCRONIZAÇÃO (a parte de rede fica em sync.js)
+     --------------------------------------------------------- */
+  let pendingRemote = null;
+  function applyState(st) {
+    const ui = S.ui;
+    S = migrate(Object.assign({}, st, { ui }));
+    if (RM) lastSnap = RM.snapshot(S);
+    save({ silent: true });
+    render();
+  }
+  // ponte usada por sync.js / sync-core.js
+  window.Recanto = {
+    getState() {
+      if (RM) { const r = RM.restamp(S, lastSnap); lastSnap = r.snap; }
+      const c = JSON.parse(JSON.stringify(S)); delete c.ui; return c;
+    },
+    applyRemote(st) {
+      const welcome = $('#f-wel');
+      if (dlg.open && !welcome) { pendingRemote = st; return; } // não troca os dados com uma janela de edição aberta
+      if (welcome) { dlgOnClose = null; closeModal(); }
+      applyState(st);
+    }
+  };
+
+  const syncInfo = () => (window.RecantoSync ? window.RecantoSync.getInfo() : null);
+  function syncLogin() {
+    const sy = window.RecantoSync; if (!sy) return toast('A sincronização ainda está carregando. Tente de novo em instantes.');
+    Promise.resolve(sy.signIn()).catch((e) => { if (e && !e.silent) toast((e && e.message) || 'Não consegui entrar.'); });
+  }
+  const hhmm = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  function syncStatusText(i) {
+    if (i.status === 'syncing') return 'Sincronizando…';
+    if (i.status === 'offline') return 'Sem conexão. Suas mudanças ficam salvas aqui e sobem quando a internet voltar.';
+    if (i.status === 'error') return `Não consegui sincronizar: ${i.error || 'erro desconhecido'}`;
+    return i.lastSync ? `✓ Sincronizado às ${hhmm(i.lastSync)}` : 'Conectado.';
+  }
+  function syncCard() {
+    const i = syncInfo();
+    let body;
+    if (!i) body = '<p class="hint">Carregando…</p>';
+    else if (!i.configured) body = '<p class="hint">A sincronização entre aparelhos ainda não foi configurada. O passo a passo está no arquivo <b>FIREBASE-SETUP.md</b>. Enquanto isso, tudo fica salvo só neste aparelho.</p>';
+    else if (i.status === 'unavailable') body = `<p class="hint sync-err">${esc(i.error)}</p>`;
+    else if (!i.user) body = '<p class="hint">Entre com sua conta Google para usar o mesmo recanto no celular e no computador.</p><div class="actions" style="justify-content:flex-start;margin-top:12px"><button class="btn sm" data-act="sync-login">Entrar com Google</button></div>';
+    else body = `<p><b>${esc(i.user.email || i.user.name || 'Conta Google')}</b></p>
+      <p class="hint ${i.status === 'error' ? 'sync-err' : ''}">${esc(syncStatusText(i))}</p>
+      <div class="actions" style="justify-content:flex-start;margin-top:12px"><button class="btn sm" data-act="sync-now">Sincronizar agora</button><button class="btn ghost sm" data-act="sync-logout">Sair</button></div>`;
+    return `<section class="card px" id="syncCard"><h3>☁️ Sincronização</h3>${body}</section>`;
+  }
+  function welcomeSyncBtn() {
+    const i = syncInfo();
+    return i && i.configured && i.status !== 'unavailable' && !i.user
+      ? '<button type="button" class="btn sky block" data-act="sync-login">☁️ Já uso em outro aparelho? Entrar com Google</button>' : '';
+  }
+  function updateSyncDot() {
+    const el = $('#syncDot'); if (!el) return;
+    const i = syncInfo();
+    if (!i || !i.configured || !i.user) { el.textContent = ''; el.removeAttribute('title'); return; }
+    const m = { ok: ['☁️', 'Sincronizado'], syncing: ['🔄', 'Sincronizando…'], offline: ['📴', 'Sem conexão'], error: ['⚠️', 'Erro na sincronização'] }[i.status] || ['☁️', ''];
+    el.textContent = m[0]; el.title = m[1];
+  }
+  let syncUnbind = null;
+  function bindSync() {
+    const sy = window.RecantoSync; if (!sy) return;
+    if (syncUnbind) syncUnbind();
+    syncUnbind = sy.onChange(() => {
+      updateSyncDot();
+      const card = $('#syncCard'); if (card) card.outerHTML = syncCard();
+    });
+    updateSyncDot();
+    const card = $('#syncCard'); if (card) card.outerHTML = syncCard();
+    const box = $('#wSyncBox'); if (box) box.innerHTML = welcomeSyncBtn();
+  }
+  window.addEventListener('recanto:sync-ready', bindSync);
+
+  /* ---------------------------------------------------------
      INÍCIO
      --------------------------------------------------------- */
   render();
   if (!S.profile.onboarded) welcomeModal();
+  bindSync();
   if (!storageOk) toast('Este navegador bloqueou o salvamento. Seus dados não vão persistir.');
 })();

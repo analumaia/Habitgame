@@ -151,6 +151,8 @@ small { font-size: 13px; }
 .hero-info { flex: 1; min-width: 0; padding-top: 10px; }
 .hero-name { font-family: var(--font-ui); font-size: 22px; font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hero-title { font-size: 14px; color: var(--ink-soft); font-weight: 700; }
+.sync-dot { margin-left: 8px; font-size: 15px; }
+.sync-err { color: var(--danger); font-weight: 700; }
 .coin-chip {
   margin-top: 10px; flex: none; display: flex; align-items: center; gap: 6px;
   background: var(--card-2); padding: 3px 10px; font-family: var(--font-ui); font-weight: 700; font-size: 18px;
