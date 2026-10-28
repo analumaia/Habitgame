@@ -16,15 +16,23 @@
   // XP necessário para sair do nível L e ir para L+1
   const xpNeed = (L) => 120 + 40 * (L - 1);
 
+  const MAXL = 25;
   const TITLES = [
     'Visitante curiosa', 'Nova moradora', 'Aprendiz de jardim', 'Jardineira', 'Padeira de domingo',
-    'Cozinheira do recanto', 'Guardiã da horta', 'Sábia da floresta', 'Mestra do recanto', 'Lenda do recanto'
+    'Cozinheira do recanto', 'Guardiã da horta', 'Sábia da floresta', 'Mestra do recanto', 'Lenda do recanto',
+    'Colhedora de flores', 'Tecelã de histórias', 'Amiga dos passarinhos', 'Doceira da vila', 'Conselheira da vila',
+    'Guardiã das estações', 'Acendedora de lanternas', 'Rainha dos cogumelos', 'Naturalista', 'Colheita farta',
+    'Curandeira de ervas', 'Fada do jardim', 'Guardiã do bosque', 'Mestra dos sonhos', 'Rainha do recanto'
   ];
   // O que o recanto ganha ao chegar em cada nível
   const UNLOCKS = {
     2: 'canteiros de flores e jardineiras nas janelas', 3: 'uma árvore frondosa', 4: 'uma cerca com portão', 5: 'uma horta com legumes',
     6: 'um poço de pedra', 7: 'um lampião e uma caixa de correio', 8: 'girassóis dourados', 10: 'um gatinho de guarda e borboletas'
   };
+
+  const accText = (L) => { const a = window.RecantoAcc ? window.RecantoAcc.at(L) : []; return a.length ? 'acessório: ' + a.map((x) => x.name).join(' e ') : ''; };
+  const unlockText = (L) => [UNLOCKS[L], accText(L)].filter(Boolean).join(' + ');
+  const unlockLevels = () => { const set = new Set(Object.keys(UNLOCKS).map(Number)); if (window.RecantoAcc) window.RecantoAcc.all().forEach((a) => set.add(a.level)); return [...set].sort((a, b) => a - b); };
 
   const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
   const DAY_ABBR = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -214,7 +222,8 @@
 
   function levelInfo(xp = xpTotal()) {
     let L = 1, rem = xp;
-    while (rem >= xpNeed(L)) { rem -= xpNeed(L); L++; }
+    while (L < MAXL && rem >= xpNeed(L)) { rem -= xpNeed(L); L++; }
+    if (L >= MAXL) return { level: MAXL, cur: 1, need: 1, max: true };
     return { level: L, cur: rem, need: xpNeed(L) };
   }
   const titleFor = (L) => TITLES[Math.min(L - 1, TITLES.length - 1)];
@@ -355,6 +364,9 @@
     return defaultAvatarUrl;
   }
   const avatarSrc = () => S.profile.avatar || defaultAvatar();
+  // foto + acessórios do nível atual sobrepostos
+  const accImg = (level) => { const o = window.RecantoAcc && window.RecantoAcc.overlay(level); return o ? `<img class="acc" alt="" src="${o}">` : ''; };
+  const avatarImgs = (level = levelInfo().level) => `<img class="pix" alt="Seu avatar" src="${avatarSrc()}">${accImg(level)}`;
 
   function renderAvatarCanvas(img, res, zoom, ox, oy, poster) {
     const c = document.createElement('canvas'); c.width = c.height = res;
@@ -393,7 +405,7 @@
       <div class="hero px">
         <div class="scene-wrap"><canvas id="scene" class="scene" role="img" aria-label="Seu recanto, que cresce a cada nível"></canvas></div>
         <div class="hero-body">
-          <button class="avatar-frame px-flat" data-act="avatar" aria-label="Editar avatar"><img class="pix" alt="Seu avatar" src="${avatarSrc()}"><span class="edit-badge px-flat" aria-hidden="true">✎</span></button>
+          <button class="avatar-frame px-flat" data-act="avatar" aria-label="Editar avatar">${avatarImgs()}<span class="edit-badge px-flat" aria-hidden="true">✎</span></button>
           <div class="hero-info">
             <div class="hero-name">${esc(S.profile.name || 'Aventureira')}<span id="syncDot" class="sync-dot"></span></div>
             <div class="hero-title">Nível ${li.level} · ${esc(titleFor(li.level))}</div>
@@ -401,7 +413,7 @@
           <div class="coin-chip px-flat" title="Pontos para gastar na loja">${COIN}<span id="coinNum">${coins()}</span></div>
         </div>
         <div class="xp-wrap">
-          <div class="xp-label"><span>XP</span><span>${li.cur} / ${li.need}</span></div>
+          <div class="xp-label"><span>XP</span><span>${li.max ? 'nível máximo ✨' : li.cur + ' / ' + li.need}</span></div>
           <div class="bar px-flat butter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progresso para o próximo nível"><i id="xpfill"></i></div>
         </div>
       </div>`;
@@ -582,24 +594,36 @@
   /* ---------------------------------------------------------
      RENDER — perfil
      --------------------------------------------------------- */
+  function wardrobe(level) {
+    const A = window.RecantoAcc; if (!A) return '';
+    const eq = new Set(A.equipped(level).map((a) => a.id));
+    return `<section class="card px"><h3>Guarda-roupa</h3>
+      <p class="hint">Acessórios que sua personagem ganha ao subir de nível (até o ${MAXL}).</p>
+      <div class="wardrobe">${A.all().map((a) => {
+        const on = a.level <= level;
+        return `<div class="wd px-flat ${on ? '' : 'locked'} ${eq.has(a.id) ? 'worn' : ''}" title="${esc(a.name)}">
+          <img class="pix" alt="" src="${A.thumb(a.id)}"><b>${esc(a.name)}</b><span>${on ? (eq.has(a.id) ? 'em uso' : 'guardado') : '🔒 nível ' + a.level}</span></div>`;
+      }).join('')}</div></section>`;
+  }
   function renderProfile() {
     const li = levelInfo();
     const t = today(), days = [];
     for (let i = 6; i >= 0; i--) { const d = addDays(t, -i); days.push({ d, p: dayPts(ymd(d)) }); }
     const max = Math.max(...days.map((x) => x.p), 10);
-    const next = Object.keys(UNLOCKS).map(Number).find((l) => l > li.level);
+    const next = unlockLevels().find((l) => l > li.level);
     return `
       <section class="card px" style="margin-top:34px">
         <div class="profile-top">
-          <button class="avatar-big px-flat" data-act="avatar" aria-label="Editar avatar"><img class="pix" alt="Seu avatar" src="${avatarSrc()}"></button>
+          <button class="avatar-big px-flat" data-act="avatar" aria-label="Editar avatar">${avatarImgs(li.level)}</button>
           <div class="stack" style="min-width:0">
             <h2 style="overflow-wrap:anywhere">${esc(S.profile.name || 'Aventureira')}</h2>
             <div class="muted" style="font-weight:800">Nível ${li.level} · ${esc(titleFor(li.level))}</div>
             <div class="row" style="flex-wrap:wrap"><button class="btn sm" data-act="avatar">Avatar</button><button class="btn ghost sm" data-act="settings">Ajustes</button></div>
           </div>
         </div>
-        ${next ? `<p class="hint" style="margin-top:14px">🎁 No nível ${next} o recanto ganha ${UNLOCKS[next]}.</p>` : ''}
+        ${next ? `<p class="hint" style="margin-top:14px">🎁 No nível ${next} você ganha ${unlockText(next)}.</p>` : ''}
       </section>
+      ${wardrobe(li.level)}
       <section class="card px"><h3>Números</h3>
         <div class="stats" style="margin-top:10px">
           <div class="stat px-flat"><b>${xpTotal()}</b><span>XP total</span></div>
@@ -956,13 +980,16 @@
   /* ---------- subir de nível ---------- */
   function levelUpModal(level) {
     sfx('level'); confetti();
-    const unlock = UNLOCKS[level];
+    const unlock = UNLOCKS[level], acc = accText(level);
     openModal(`<div class="modal-in levelup">
       <div class="muted" style="font-weight:800">Você subiu de nível!</div>
       <div class="big">NÍVEL ${level}</div>
       <h3>${esc(titleFor(level))}</h3>
       <div class="scene-wrap px-flat" style="margin-top:10px"><canvas id="lvScene" class="scene" role="img" aria-label="Seu recanto neste nível"></canvas></div>
-      ${unlock ? `<p>🎁 Seu recanto ganhou <b>${unlock}</b>.</p>` : '<p class="muted">Continue cuidando dos seus hábitos.</p>'}
+      ${acc ? `<div class="lv-avatar px-flat">${avatarImgs(level)}</div>` : ''}
+      ${unlock ? `<p>🎁 Seu recanto ganhou <b>${unlock}</b>.</p>` : ''}
+      ${acc ? `<p>🎀 Novo ${accText(level)}!</p>` : ''}
+      ${!unlock && !acc ? '<p class="muted">Continue cuidando dos seus hábitos.</p>' : ''}
       <div class="actions" style="justify-content:center"><button class="btn" data-act="close">Que delícia!</button></div></div>`,
       (m) => drawScene($('#lvScene', m), level));
   }
