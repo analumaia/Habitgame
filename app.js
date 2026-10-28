@@ -598,11 +598,11 @@
     const A = window.RecantoAcc; if (!A) return '';
     const eq = new Set(A.equipped(level).map((a) => a.id));
     return `<section class="card px"><h3>Guarda-roupa</h3>
-      <p class="hint">Acessórios que sua personagem ganha ao subir de nível (até o ${MAXL}).</p>
+      <p class="hint">Acessórios que você ganha ao subir de nível (até o ${MAXL}). O contorno amarelo marca o que está em uso.</p>
       <div class="wardrobe">${A.all().map((a) => {
         const on = a.level <= level;
-        return `<div class="wd px-flat ${on ? '' : 'locked'} ${eq.has(a.id) ? 'worn' : ''}" title="${esc(a.name)}">
-          <img class="pix" alt="" src="${A.thumb(a.id)}"><b>${esc(a.name)}</b><span>${on ? (eq.has(a.id) ? 'em uso' : 'guardado') : '🔒 nível ' + a.level}</span></div>`;
+        return `<div class="acc-tile px-flat ${on ? '' : 'locked'} ${eq.has(a.id) ? 'worn' : ''}">
+          ${on ? `<img class="thumb" alt="" src="${A.thumb(a.id)}">` : '<span class="thumb q" aria-hidden="true">?</span>'}<span class="nm">${on ? esc(a.name) : '🔒 Nível ' + a.level}</span></div>`;
       }).join('')}</div></section>`;
   }
   function renderProfile() {

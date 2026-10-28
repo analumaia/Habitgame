@@ -54,10 +54,16 @@
     const sorted = items.slice().sort((a, b) => slots.indexOf(a[1]) - slots.indexOf(b[1]));
     return (cache[key] = paint([].concat(...sorted.map((i) => i[4]))).toDataURL());
   }
-  // miniatura de um acessório isolado
+  // miniatura de um acessório isolado, recortada no tamanho do desenho
   function thumb(id) {
-    const i = byId(id);
-    return cache['t' + id] || (cache['t' + id] = paint(i[4]).toDataURL());
+    if (cache['t' + id]) return cache['t' + id];
+    const sh = byId(id)[4];
+    const x0 = Math.max(0, Math.min(...sh.map((s) => s[0])) - 1), y0 = Math.max(0, Math.min(...sh.map((s) => s[1])) - 1);
+    const x1 = Math.min(32, Math.max(...sh.map((s) => s[0] + s[2])) + 1), y1 = Math.min(32, Math.max(...sh.map((s) => s[1] + s[3])) + 1);
+    const w = x1 - x0, h = y1 - y0, side = Math.max(w, h);
+    const c = document.createElement('canvas'); c.width = c.height = side;
+    c.getContext('2d').drawImage(paint(sh), x0, y0, w, h, Math.floor((side - w) / 2), Math.floor((side - h) / 2), w, h);
+    return (cache['t' + id] = c.toDataURL());
   }
   const all = () => ITEMS.map(info);
   const at = (level) => ITEMS.filter((i) => i[2] === level).map(info);
