@@ -134,13 +134,11 @@ small { font-size: 13px; }
 
 /* ---------- herói ---------- */
 .hero { background: var(--card); margin: 6px 6px 0; }
-.scene {
-  display: block; width: 100%; aspect-ratio: 3 / 1;
-  image-rendering: crisp-edges; image-rendering: pixelated;
-}
+.scene-wrap { overflow: hidden; line-height: 0; background: #86c26b; }
+.scene { display: block; max-width: none; image-rendering: crisp-edges; image-rendering: pixelated; }
 .hero-body { display: flex; align-items: flex-start; gap: 14px; padding: 0 14px; }
 .avatar-frame {
-  flex: none; width: 92px; height: 92px; margin-top: -38px; position: relative;
+  flex: none; width: 92px; height: 92px; margin-top: -42px; position: relative; z-index: 1;
   background: var(--card-2);
 }
 .avatar-frame .edit-badge {
@@ -263,7 +261,11 @@ button.wd:not(:disabled):hover { background: var(--butter); color: var(--on-acce
 .wallet .big { font-family: var(--font-ui); font-size: 34px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px 18px; margin: 22px 6px; }
 .item { background: var(--card); padding: 14px 12px 14px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; position: relative; }
-.item .emoji-big { font-size: 40px; line-height: 1.1; }
+.item .emoji-big {
+  width: 68px; height: 68px; display: grid; place-items: center; font-size: 36px; line-height: 1; background: var(--card-2);
+  box-shadow: 0 -3px 0 0 var(--edge), 0 3px 0 0 var(--edge), -3px 0 0 0 var(--edge), 3px 0 0 0 var(--edge), inset 0 -5px 0 rgba(0, 0, 0, .08);
+  margin: 4px 0 6px;
+}
 .item .name { font-weight: 800; overflow-wrap: anywhere; }
 .item .cost { font-family: var(--font-ui); font-weight: 700; display: flex; gap: 5px; align-items: center; font-size: 18px; }
 .item .edit-mini { position: absolute; top: 6px; right: 8px; font-size: 15px; opacity: .7; padding: 4px; }

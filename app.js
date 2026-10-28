@@ -22,8 +22,8 @@
   ];
   // O que o recanto ganha ao chegar em cada nível
   const UNLOCKS = {
-    2: 'flores no jardim', 3: 'uma árvore frondosa', 4: 'uma cerquinha de madeira', 5: 'uma segunda árvore',
-    6: 'um laguinho', 7: 'um lampião na entrada', 8: 'uma horta', 10: 'um gatinho de guarda'
+    2: 'canteiros de flores e jardineiras nas janelas', 3: 'uma árvore frondosa', 4: 'uma cerca com portão', 5: 'uma horta com legumes',
+    6: 'um poço de pedra', 7: 'um lampião e uma caixa de correio', 8: 'girassóis dourados', 10: 'um gatinho de guarda e borboletas'
   };
 
   const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -331,105 +331,9 @@
      --------------------------------------------------------- */
   const isNightTheme = () => document.documentElement.dataset.theme === 'night';
 
+  // o desenho em si está em scene.js
   function drawScene(cv, level) {
-    const W = 192, H = 64;
-    cv.width = W; cv.height = H;
-    const g = cv.getContext('2d');
-    g.imageSmoothingEnabled = false;
-    const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
-    let seed = 11;
-    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const now = new Date();
-    const hr = now.getHours() + now.getMinutes() / 60;
-    const night = isNightTheme() || hr < 5.5 || hr >= 19.5;
-    const dusk = !night && (hr < 8 || hr >= 17.5);
-
-    const sky = night ? ['#1b1d45', '#272a5c', '#363774', '#4a4488']
-      : dusk ? ['#f3a683', '#f6bc90', '#f9d3a0', '#fbe6bd']
-        : ['#7cc0e3', '#97cfe9', '#b4dff0', '#d1ecf6'];
-    sky.forEach((c, i) => R(0, i * 11, W, 12, c));
-
-    if (night) {
-      for (let i = 0; i < 30; i++) R(rnd() * W, rnd() * 34, 1, 1, i % 4 ? '#fff6d6' : '#c9c4ff');
-      R(152, 8, 7, 7, '#fff3c4'); R(150, 9, 11, 5, '#fff3c4'); R(155, 6, 5, 11, '#fff3c4');
-      R(154, 8, 6, 7, sky[1]); // recorte da lua crescente
-    } else {
-      const t = Math.min(1, Math.max(0, (hr - 5.5) / 14));
-      const sx = 16 + t * 160, sy = 34 - Math.sin(t * Math.PI) * 26;
-      R(sx - 3, sy - 4, 7, 9, '#ffe07a'); R(sx - 4, sy - 3, 9, 7, '#ffe07a'); R(sx - 2, sy - 5, 5, 11, '#ffe07a');
-    }
-    const cloud = (x, y) => {
-      const c = night ? '#585a9c' : dusk ? '#fff0e0' : '#ffffff';
-      R(x, y + 2, 16, 3, c); R(x + 2, y, 9, 3, c); R(x + 9, y + 1, 6, 2, c);
-    };
-    cloud(18, 8); cloud(110, 14); cloud(70, 4);
-
-    // colinas ao fundo
-    const far = night ? '#2f5a52' : '#a5cf86';
-    for (let x = 0; x < W; x++) {
-      const y = Math.round(38 + Math.sin(x / 17) * 4 + Math.sin(x / 6.5) * 1.2);
-      R(x, y, 1, 47 - y, far);
-    }
-    // chão
-    const grass = night ? '#3e7a57' : '#86c06c';
-    const grassD = night ? '#336a4a' : '#6fae58';
-    R(0, 45, W, 19, grass);
-    for (let i = 0; i < 70; i++) R(rnd() * W, 46 + rnd() * 17, 2, 1, grassD);
-    // caminho
-    for (let y = 46; y < H; y++) { const w = 6 + Math.round((y - 46) * 0.9); R(88 - w / 2, y, w, 1, night ? '#8c7a64' : '#e2c48f'); }
-
-    const tree = (x, y) => {
-      R(x - 1, y - 13, 3, 14, '#6b4a33');
-      [4, 8, 10, 12, 12, 10, 8].forEach((w, i) => R(x - w / 2, y - 21 + i, w, 1, night ? '#2f6b45' : '#4f8a4b'));
-      R(x - 4, y - 19, 2, 1, night ? '#3f8456' : '#74b45f'); R(x - 3, y - 17, 2, 1, night ? '#3f8456' : '#74b45f');
-    };
-    if (level >= 3) tree(22, 50);
-    if (level >= 5) tree(166, 49);
-
-    // laguinho
-    if (level >= 6) {
-      const wc = night ? '#3a5f9a' : '#6fb7dd';
-      [10, 16, 20, 16, 10].forEach((w, i) => R(140 - w / 2, 54 + i, w, 1, wc));
-      R(134, 55, 3, 1, night ? '#7ea3dd' : '#bfe6f5');
-    }
-    // horta
-    if (level >= 8) {
-      R(30, 56, 22, 5, '#8a5a3c');
-      for (let x = 32; x < 50; x += 4) { R(x, 54, 1, 2, '#6fb05f'); R(x - 1, 54, 3, 1, '#86c06c'); }
-    }
-
-    // casinha
-    R(94, 24, 4, 8, '#b5654c');                         // chaminé
-    R(95, 21, 2, 2, night ? '#8a8cc4' : '#ffffff'); R(97, 18, 2, 2, night ? '#8a8cc4' : '#ffffff');
-    for (let i = 0; i < 9; i++) { const w = 10 + i * 3; R(88 - w / 2, 27 + i, w, 1, i % 2 ? '#d9694f' : '#e0745a'); }
-    R(70, 36, 36, 1, '#a94a36');
-    R(75, 37, 26, 12, '#4a3326');
-    R(76, 37, 24, 11, night ? '#d9c7a4' : '#f5e3bf');
-    R(85, 41, 6, 8, '#8a5a3c'); R(89, 45, 1, 1, '#f6cf6a');
-    const glass = night ? '#ffd36b' : '#8fcbe5';
-    [[79, 40], [93, 40]].forEach(([x, y]) => { R(x, y, 5, 5, glass); R(x + 2, y, 1, 5, '#f5e3bf'); R(x, y + 2, 5, 1, '#f5e3bf'); });
-
-    if (level >= 4) {
-      for (let x = 108; x <= 134; x += 5) R(x, 43, 2, 7, '#b58a5a');
-      R(108, 45, 28, 1, '#9c7448'); R(108, 47, 28, 1, '#9c7448');
-    }
-    if (level >= 7) {
-      R(68, 40, 1, 10, '#4a3326');
-      if (night) R(64, 35, 9, 8, 'rgba(255,224,122,.28)');
-      R(66, 37, 5, 4, night ? '#ffe07a' : '#f6cf6a'); R(66, 36, 5, 1, '#4a3326');
-    }
-    if (level >= 2) {
-      const FL = [[18, 54], [12, 58], [54, 51], [66, 57], [112, 53], [122, 58], [146, 52], [176, 55], [44, 50], [186, 59]];
-      const pal = ['#f4a9bd', '#ffffff', '#c1aee8', '#f6cf6a'];
-      FL.slice(0, Math.min(FL.length, (level - 1) * 2)).forEach(([x, y], i) => {
-        R(x, y, 1, 2, '#4f8a4b');
-        const c = pal[i % pal.length];
-        R(x - 1, y - 1, 1, 1, c); R(x + 1, y - 1, 1, 1, c); R(x, y - 2, 1, 1, c); R(x, y - 1, 1, 1, '#f6cf6a');
-      });
-    }
-    if (level >= 10) {
-      R(103, 46, 5, 3, '#e39a52'); R(106, 44, 3, 3, '#e39a52'); R(106, 43, 1, 1, '#e39a52'); R(108, 43, 1, 1, '#e39a52'); R(102, 45, 1, 3, '#e39a52');
-    }
+    if (window.RecantoScene) window.RecantoScene.fit(cv, level, { night: isNightTheme() });
   }
 
   /* ---------------------------------------------------------
@@ -487,7 +391,7 @@
     const li = levelInfo(), pct = Math.round(li.cur / li.need * 100);
     $('#hero').innerHTML = `
       <div class="hero px">
-        <canvas id="scene" class="scene" aria-label="Seu recanto, que cresce a cada nível"></canvas>
+        <div class="scene-wrap"><canvas id="scene" class="scene" role="img" aria-label="Seu recanto, que cresce a cada nível"></canvas></div>
         <div class="hero-body">
           <button class="avatar-frame px-flat" data-act="avatar" aria-label="Editar avatar"><img class="pix" alt="Seu avatar" src="${avatarSrc()}"><span class="edit-badge px-flat" aria-hidden="true">✎</span></button>
           <div class="hero-info">
@@ -1057,7 +961,7 @@
       <div class="muted" style="font-weight:800">Você subiu de nível!</div>
       <div class="big">NÍVEL ${level}</div>
       <h3>${esc(titleFor(level))}</h3>
-      <canvas id="lvScene" class="scene px-flat"></canvas>
+      <div class="scene-wrap px-flat" style="margin-top:10px"><canvas id="lvScene" class="scene" role="img" aria-label="Seu recanto neste nível"></canvas></div>
       ${unlock ? `<p>🎁 Seu recanto ganhou <b>${unlock}</b>.</p>` : '<p class="muted">Continue cuidando dos seus hábitos.</p>'}
       <div class="actions" style="justify-content:center"><button class="btn" data-act="close">Que delícia!</button></div></div>`,
       (m) => drawScene($('#lvScene', m), level));
@@ -1256,6 +1160,13 @@
     const box = $('#wSyncBox'); if (box) box.innerHTML = welcomeSyncBtn();
   }
   window.addEventListener('recanto:sync-ready', bindSync);
+
+  // refaz o cenário quando a tela muda de tamanho (mantém os pixels nítidos)
+  let resizeT;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { const c = $('#scene'); if (c) drawScene(c, levelInfo().level); }, 150);
+  });
 
   /* ---------------------------------------------------------
      INÍCIO
