@@ -174,7 +174,7 @@ small { font-size: 13px; }
 .row.between { justify-content: space-between; }
 .stack > * + * { margin-top: 10px; }
 
-.chips-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 26px 6px 8px; padding: 6px 0 10px; }
+.chips-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 26px 6px 8px; padding: 6px 0 10px; }
 .fchip {
   min-width: 0; padding: 8px 2px; background: var(--card-2); text-align: center; white-space: nowrap;
   font-family: var(--font-ui); font-weight: 600; font-size: 16px;
@@ -183,7 +183,7 @@ small { font-size: 13px; }
 .fchip.on { background: var(--butter); color: var(--on-accent); }
 .fchip .n { display: block; font-size: 12px; font-weight: 700; color: var(--ink-soft); line-height: 1.1; }
 .fchip.on .n { color: var(--on-accent); }
-@media (max-width: 400px) { .fchip { font-size: 14px; } }
+@media (max-width: 480px) { .fchip { font-size: 12px; padding-left: 2px; padding-right: 2px; } .chips-row { gap: 5px; margin-left: 2px; margin-right: 2px; } }
 
 .section-title { margin: 28px 6px 6px; font-family: var(--font-ui); font-size: 18px; color: var(--ink-soft); }
 
@@ -387,3 +387,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: .7;
 .acc-tile .thumb.q { display: grid; place-items: center; font-family: var(--font-ui); font-size: 26px; font-weight: 700; color: var(--muted); background: var(--card); }
 .acc-tile.locked .nm { color: var(--muted); font-weight: 700; }
 @media (min-width: 560px) { .wardrobe { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.notice { display: block; width: 100%; text-align: left; margin: 10px 0 0; padding: 10px 12px; background: var(--card-2); color: var(--ink); font: inherit; font-weight: 700; line-height: 1.35; cursor: pointer; border: 0; }
+.notice b { text-decoration: underline; }
+.pts.retro { opacity: .8; }

@@ -14,7 +14,8 @@ No celular, abra o link e use **Adicionar à tela inicial** para ter um atalho c
 
 ## Como o jogo funciona
 
-- **Hábitos**: vale 10 pontos cada conclusão. Filtros **Hoje**, **Diários**, **Semanais** e **Mensais**.
+- **Hábitos**: vale 10 pontos cada conclusão. Filtros **Hoje**, **Ontem**, **Diários**, **Semanais** e **Mensais**.
+  - Esqueceu de marcar? Dá para marcar o dia anterior na aba **Ontem** (ou pelo aviso na aba Hoje) valendo 80% dos pontos (`RETRO_PCT` no `app.js`). Depois disso o dia fecha. Hábitos mensais atrasados também valem 80%.
   - Semanal: você escolhe os dias da semana.
   - Mensal: ou um dia do mês (ex.: dia 5; dia 31 cai no último dia dos meses mais curtos), ou um dia da semana (ex.: 1ª segunda, última sexta).
 - **Pontos**: viram **XP** (sobe de nível, nunca diminui ao gastar) e **moedas** (saldo da loja).

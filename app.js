@@ -11,6 +11,7 @@
   const KEY = 'recanto-dos-habitos:v1';
   const DEFAULT_PTS_HABIT = 10;   // pontos por hábito concluído
   const DEFAULT_PTS_QUEST = 50;   // pontos por quest concluída
+  const RETRO_PCT = 0.8;          // marcar o dia anterior (ou mensal atrasado) vale 80% dos pontos
   const WEEK_START = 0;           // 0 = semana começa no domingo, 1 = na segunda
 
   // XP necessário para sair do nível L e ir para L+1
@@ -136,6 +137,27 @@
   const activeHabits = () => S.habits.filter((h) => !h.deleted);
   const habitById = (id) => S.habits.find((h) => h.id === id);
   const isDone = (h, ds) => !!(S.comps[h.id] && S.comps[h.id][ds]);
+
+  /* retroativo: dá para marcar ontem (diário/semanal) com desconto; mensal atrasado também */
+  const retroPts = () => Math.max(1, Math.round(S.settings.ptsHabit * RETRO_PCT));
+  const ptsFor = (ds) => (ds < ymd(today()) ? retroPts() : S.settings.ptsHabit);
+  const yesterdayDate = () => addDays(today(), -1);
+  function canMark(h, ds) {
+    const ts = ymd(today());
+    if (ds > ts) return false;
+    if (ds === ts || ds === ymd(yesterdayDate())) return true;
+    return h.freq === 'monthly';
+  }
+  // hábitos previstos para ontem
+  function yesterdayList() {
+    const y = yesterdayDate(), ys = ymd(y), out = [];
+    for (const h of activeHabits()) {
+      if (ys < h.createdAt) continue;
+      if (h.freq === 'monthly' ? monthlyStr(h, y.getFullYear(), y.getMonth()) === ys : isDue(h, y)) out.push({ h, date: ys });
+    }
+    return out;
+  }
+  const yesterdayPending = () => yesterdayList().filter((x) => !isDone(x.h, x.date));
 
   // dia do mês em que um hábito mensal cai em (ano, mês)
   function monthlyDay(h, y, m) {
@@ -437,7 +459,7 @@
       const cls = ['wd', due ? 'due' : 'none', done ? 'done' : '', ds === ts ? 'today' : '', future ? 'future' : '', due && !done && !future && ds < ts ? 'missed' : ''].join(' ');
       const label = DAY_LETTER[d.getDay()];
       const inner = done ? CHECK : label;
-      if ((due && !future) || done) cells += `<button class="${cls}" data-act="toggle" data-id="${h.id}" data-date="${ds}" aria-pressed="${done}" aria-label="${cap(DAY_NAME[d.getDay()])}, dia ${d.getDate()}${done ? ' (concluído)' : ''}">${inner}</button>`;
+      if ((due && !future && canMark(h, ds)) || done) cells += `<button class="${cls}" data-act="toggle" data-id="${h.id}" data-date="${ds}" aria-pressed="${done}" aria-label="${cap(DAY_NAME[d.getDay()])}, dia ${d.getDate()}${done ? ' (concluído)' : ''}">${inner}</button>`;
       else cells += `<span class="${cls}" aria-hidden="true">${label}</span>`;
     }
     return `<div class="strip">${cells}</div>`;
@@ -451,6 +473,8 @@
       date = m.ds; done = m.state === 'done'; enabled = m.ds <= ts;
       const txt = { done: `Concluído em ${fmtShort(m.ds)} ✓`, late: `Atrasada · era dia ${fmtShort(m.ds)}`, today: 'É hoje!', upcoming: `Próxima: ${fmtShort(m.ds)}` }[m.state];
       meta = `${ruleText(h)} · ${txt}`;
+    } else if (ctx === 'yesterday') {
+      date = ymd(yesterdayDate()); done = isDone(h, date); enabled = true;
     } else if (isDue(h, t)) {
       date = ts; done = isDone(h, ts); enabled = true;
     }
@@ -474,7 +498,7 @@
           ${h.notes ? `<div class="h-notes">${esc(h.notes)}</div>` : ''}
           <div class="h-meta">${meta}</div>
         </div>
-        <div class="pts">+${S.settings.ptsHabit}${COIN}</div>
+        <div class="pts ${date && date < ts && !done ? 'retro' : ''}">+${done ? S.comps[h.id][date] : (date ? ptsFor(date) : S.settings.ptsHabit)}${COIN}</div>
         ${strip}
       </article>`;
   }
@@ -494,8 +518,8 @@
     const f = S.ui.filter, hs = activeHabits();
     const counts = { daily: 0, weekly: 0, monthly: 0 };
     hs.forEach((h) => counts[h.freq]++);
-    let html = `<div class="chips-row" role="tablist" aria-label="Filtro de hábitos">${[['today', 'Hoje'], ['daily', 'Diários'], ['weekly', 'Semanais'], ['monthly', 'Mensais']]
-      .map(([k, l]) => `<button class="fchip ${f === k ? 'on' : ''}" role="tab" aria-selected="${f === k}" data-act="filter" data-v="${k}">${l}<span class="n">${k === 'today' ? todayList().length : counts[k]}</span></button>`).join('')}</div>`;
+    let html = `<div class="chips-row" role="tablist" aria-label="Filtro de hábitos">${[['today', 'Hoje'], ['yesterday', 'Ontem'], ['daily', 'Diários'], ['weekly', 'Semanais'], ['monthly', 'Mensais']]
+      .map(([k, l]) => `<button class="fchip ${f === k ? 'on' : ''}" role="tab" aria-selected="${f === k}" data-act="filter" data-v="${k}">${l}<span class="n">${k === 'today' ? todayList().length : k === 'yesterday' ? yesterdayPending().length : counts[k]}</span></button>`).join('')}</div>`;
 
     if (!hs.length) {
       return html + `<div class="card px empty">
@@ -505,10 +529,22 @@
     }
     html += mainQuestMini();
 
-    if (f === 'today') {
+    if (f === 'yesterday') {
+      const y = yesterdayDate(), list = yesterdayList();
+      const dn = list.filter((x) => isDone(x.h, x.date)).length, pts = dayPts(ymd(y));
+      html += `<section class="card px day-card">
+        <div class="row between"><span class="date">${cap(DAY_NAME[y.getDay()])}, ${y.getDate()} de ${MONTH_NAME[y.getMonth()]}</span><span class="muted"><b>${dn}</b>/${list.length}</span></div>
+        <div class="bar px-flat"><i style="width:${list.length ? Math.round(dn / list.length * 100) : 0}%"></i></div>
+        <div class="muted" style="margin-top:8px">Pontos de ontem: <b>${pts}</b>${COIN} · marcar hoje um hábito de ontem vale <b>${retroPts()}</b> em vez de ${S.settings.ptsHabit}.</div>
+      </section>`;
+      if (!list.length) html += `<div class="card px empty"><div class="big">🍃</div><h3>Nada estava marcado para ontem</h3><p class="muted">Sem hábitos pendentes por lá.</p></div>`;
+      else html += list.map((x) => habitRow(x.h, 'yesterday')).join('');
+    } else if (f === 'today') {
       const t = today(), list = todayList();
       const dn = list.filter((x) => isDone(x.h, x.date)).length;
       const pct = list.length ? Math.round(dn / list.length * 100) : 0;
+      const pend = yesterdayPending().length;
+      if (pend) html += `<button class="notice px" data-act="filter" data-v="yesterday">⏪ Você esqueceu ${pend} hábito${pend > 1 ? 's' : ''} de ontem. <b>Marcar agora</b> (${retroPts()} pontos cada)</button>`;
       html += `<section class="card px day-card">
         <div class="row between"><span class="date">${cap(DAY_NAME[t.getDay()])}, ${t.getDate()} de ${MONTH_NAME[t.getMonth()]}</span><span class="muted"><b>${dn}</b>/${list.length}</span></div>
         <div class="bar px-flat"><i style="width:${pct}%"></i></div>
@@ -1006,10 +1042,12 @@
       if (coins() - pts < 0) return toast('Esses pontos já foram gastos na loja. Ganhe mais antes de desfazer.');
       delete c[ds]; sfx('undo');
     } else {
-      if (ds > ymd(today())) return;
-      c[ds] = S.settings.ptsHabit; sfx('check');
+      if (!canMark(h, ds)) return toast('Esse dia já fechou: só dá para marcar hoje ou ontem.');
+      const pts = ptsFor(ds);
+      c[ds] = pts; sfx('check');
+      if (ds < ymd(today())) toast(`⏪ Marcado com atraso: +${pts} pontos`);
       const r = ev && ev.currentTarget ? ev.currentTarget.getBoundingClientRect() : null;
-      floatText(`+${S.settings.ptsHabit}`, r ? r.left + r.width / 2 : null, r ? r.top : null);
+      floatText(`+${pts}`, r ? r.left + r.width / 2 : null, r ? r.top : null);
     }
     commit(prev);
   }
